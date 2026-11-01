@@ -13,6 +13,7 @@
 
 #include <SDL.h>
 #include <errno.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -222,10 +223,11 @@ static void quit_requested(void)
  *   touch screen (handheld): menus cursor and click, in play a drag looks around
  *
  * sdmc:/switch/cod1/cod1.cfg: stick_sensitivity=<multiplier> (default 1.0),
- * invert_y=1, touch=0, gyro=0|1, gyro_ads=1 (gyro only while aiming with ZL),
- * gyro_yaw / gyro_roll / gyro_pitch=<signed counts per degree> (defaults -10 / -12 / -10),
- * gyro_toggle=0 (R3, a click of the right stick, switches the gyro on and off),
- * gyro_debug=1 (logs the raw axes). */
+ * invert_y=1, touch=0, analog_move=0|1 (proportional left stick), move_curve /
+ * strafe_curve=<exponent> (defaults 1.6 / 2.0), gyro=0|1, gyro_ads=1 (gyro only
+ * while aiming with ZL), gyro_yaw / gyro_roll / gyro_pitch=<signed counts per degree>
+ * (defaults -10 / -12 / -10), gyro_toggle=0 (R3, a click of the right stick,
+ * switches the gyro on and off), gyro_debug=1 (logs the raw axes). */
 
 static const struct {
     uint64_t button;
@@ -264,6 +266,18 @@ static int invert_y, touch_on = 1;
 static int gyro_on = 1, gyro_ads, gyro_debug, gyro_toggle = 1;
 static float gyro_yaw = -10.0f, gyro_roll = -12.0f, gyro_pitch = -10.0f;
 static HidSixAxisSensorHandle sx_handheld, sx_full, sx_dual_l, sx_dual_r;
+
+/* Analog movement. The engine only knows keys, but like Quake 3's it turns a
+ * key into a speed by how much of the frame it was held: CL_KeyState returns
+ * kbutton.msec / frame_msec, clamped to 0..1, and CL_KeyMove scales that to
+ * +-127. So the left stick, in play, does not press W A S D: the port writes
+ * the stick's value as the milliseconds the four kbuttons were "held" this
+ * frame, which the engine then reads as a partial key. The stick's length goes
+ * through move_curve (heading unchanged); the sideways part is eased by
+ * strafe_curve on its own so forward stays dominant and diagonals arrive
+ * gradually. cod1.cfg: analog_move=0, move_curve=<n>, strafe_curve=<n>. */
+static int analog_move = 1;
+static float move_curve = 1.6f, strafe_curve = 2.0f;
 
 static void controls_init(void)
 {
@@ -305,11 +319,23 @@ static void controls_init(void)
                 gyro_roll = strtof(line + 10, NULL);
             else if (!strncmp(line, "gyro_pitch=", 11))
                 gyro_pitch = strtof(line + 11, NULL);
+            else if (!strncmp(line, "analog_move=", 12))
+                analog_move = line[12] != '0';
+            else if (!strncmp(line, "move_curve=", 11))
+                move_curve = strtof(line + 11, NULL);
+            else if (!strncmp(line, "strafe_curve=", 13))
+                strafe_curve = strtof(line + 13, NULL);
         }
         fclose(f);
     }
     if (!(stick_sensitivity >= 0.1f && stick_sensitivity <= 10.0f))
         stick_sensitivity = 1.0f;
+    if (!(move_curve >= 0.5f && move_curve <= 4.0f))
+        move_curve = 1.6f;
+    if (!(strafe_curve >= 0.5f && strafe_curve <= 4.0f))
+        strafe_curve = 2.0f;
+    rt_log("controls: analog move %s, curves %.2f / %.2f", analog_move ? "on" : "off", (double)move_curve,
+           (double)strafe_curve);
     rt_log("controls: right stick x%.2f%s, touch %s", (double)stick_sensitivity, invert_y ? ", inverted" : "",
            touch_on ? "on" : "off");
     rt_log("controls: gyro %s%s, yaw %.1f roll %.1f pitch %.1f", gyro_on ? "on" : "off", gyro_ads ? " (aiming only)" : "",
@@ -477,6 +503,33 @@ static void gyro_poll(int aiming)
     mouse_motion(mx, my);
 }
 
+/* Left stick -> the four movement kbuttons' held time (see analog_move). The
+ * stick is read radially: its length is the pace, its direction the heading. */
+static void analog_move_poll(HidAnalogStickState ls)
+{
+    float x = (float)ls.x / 32767.0f, y = (float)ls.y / 32767.0f;   /* up is positive */
+    float m = sqrtf(x * x + y * y), fwd = 0.0f, side = 0.0f;
+    const float dead = 0.15f, full = 0.95f;
+    if (m > dead) {
+        float pace = (m - dead) / (full - dead);
+        if (pace > 1.0f)
+            pace = 1.0f;
+        pace = powf(pace, move_curve);
+        fwd = pace * y / m;
+        side = pace * x / m;
+        float s = fabsf(side);
+        side = copysignf(powf(s, strafe_curve), side);
+    }
+    uint32_t frame = RD32(COD_FRAME_MSEC);   /* the last frame's: the next is about the same */
+    if (frame < 1u || frame > 200u)
+        frame = 33u;
+    float f = (float)frame;
+    WR32(COD_KB_FORWARD + 0xCu, fwd > 0.0f ? (uint32_t)(fwd * f + 0.5f) : 0u);
+    WR32(COD_KB_BACK + 0xCu, fwd < 0.0f ? (uint32_t)(-fwd * f + 0.5f) : 0u);
+    WR32(COD_KB_RIGHT + 0xCu, side > 0.0f ? (uint32_t)(side * f + 0.5f) : 0u);
+    WR32(COD_KB_LEFT + 0xCu, side < 0.0f ? (uint32_t)(-side * f + 0.5f) : 0u);
+}
+
 static void pad_poll(void)
 {
     static uint64_t last_look;
@@ -503,6 +556,11 @@ static void pad_poll(void)
     HidAnalogStickState ls = padGetStickPos(&pad, 0), rs = padGetStickPos(&pad, 1);
     int lx = axis(ls.x, 0), ly = axis(ls.y, 1);
     uint8_t want[4] = { ly < -40, ly > 40, lx < -40, lx > 40 };
+    if (analog_move && pad_in_gameplay()) {
+        /* in play the stick is analog, not W A S D (the menus keep the arrows) */
+        want[0] = want[1] = want[2] = want[3] = 0;
+        analog_move_poll(ls);
+    }
     for (int i = 0; i < 4; i++) {
         if (want[i] != stick_held[i]) {
             stick_held[i] = want[i];

@@ -188,7 +188,8 @@ All optional, all in `SD:/switch/cod1/`:
 | File | What it does |
 |---|---|
 | `args.txt` | The game's command line, e.g. `+set r_flares 0 +set com_hunkMegs 128`. Without it the port uses `+set r_flares 0 +set r_ignorehwgamma 0 +set com_introplayed 1`; a file of your own replaces all of these. |
-| `cod1.cfg` | Controls, one per line: `stick_sensitivity=1.5`, `invert_y=1`, `touch=0`, and the gyro (below). |
+| `cod1.cfg` | Controls, one per line: `stick_sensitivity=1.5`, `invert_y=1`, `touch=0`, `analog_move=0`, `move_curve=1.6`, `strafe_curve=2.0`, and the gyro (below). |
+| `env.txt` | Port options, `NAME=value` per line (see below). |
 
 **Gyro** (also in `cod1.cfg`): motion aiming from the Joy-Cons, a Pro Controller or the console's own sensor, added to the right stick's look.
 
@@ -200,7 +201,8 @@ All optional, all in `SD:/switch/cod1/`:
 | `gyro_yaw=-10`, `gyro_roll=-12` | Turning, in mouse counts per degree: yaw is tilting the device, roll sweeping the whole controller. A minus sign reverses the direction. |
 | `gyro_pitch=-10` | Looking up and down (nodding the device). `invert_y=1` flips it. |
 | `gyro_debug=1` | Logs the raw sensor axes to `cod1.log`, to tune the signs. |
-| `env.txt` | Port options, `NAME=value` per line (see below). |
+
+The left stick is analog in play: how far you push it sets the pace, from a slow step to a full run, instead of pressing W A S D. `move_curve` shapes the pace (higher = a longer slow range), `strafe_curve` eases the sideways part on its own so forward stays dominant; `analog_move=0` goes back to keys. The menus still use the arrow keys.
 
 Options for `env.txt`:
 
