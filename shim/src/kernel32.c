@@ -271,9 +271,18 @@ SHIM(kernel32, TerminateProcess)
 
 SHIM(kernel32, UnhandledExceptionFilter) { stdcall_ret(c, 1, 1); }
 
+void rt_eh_throw(Ctx *c, uint32_t obj, uint32_t info) __attribute__((noreturn));
+
+/* An MSVC C++ throw (code E06D7363, 3 arguments: magic 19930520, the object, its
+ * ThrowInfo). The executables link the C runtime statically, so their
+ * _CxxThrowException ends here rather than in msvcrt's: handed to the same
+ * catch search (runtime/src/eh.c). Any other exception is fatal. */
 SHIM(kernel32, RaiseException)
 {
-    rt_fatal(c, "RaiseException(%08X, flags %08X)", ARG(0), ARG(1));
+    uint32_t code = ARG(0), nargs = ARG(2), args = ARG(3);
+    if (code == 0xE06D7363u && nargs >= 3u && args && RD32(args) == 0x19930520u)
+        rt_eh_throw(c, RD32(args + 4u), RD32(args + 8u));
+    rt_fatal(c, "RaiseException(%08X, flags %08X)", code, ARG(1));
 }
 
 SHIM(kernel32, RtlUnwind)
