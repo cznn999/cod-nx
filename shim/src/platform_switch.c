@@ -263,7 +263,7 @@ static int invert_y, touch_on = 1;
  * Sensor Y (tilting the device) turns, as does Z (sweeping the whole controller:
  * the two gestures players make), X (nodding) pitches. Each has a signed
  * counts-per-degree gain in the cfg, so a wrong direction is a minus sign. */
-static int gyro_on = 1, gyro_ads, gyro_debug, gyro_toggle = 1;
+static int gyro_on = 0, gyro_ads, gyro_debug, gyro_toggle = 1;
 static float gyro_yaw = -10.0f, gyro_roll = -12.0f, gyro_pitch = -10.0f;
 static HidSixAxisSensorHandle sx_handheld, sx_full, sx_dual_l, sx_dual_r;
 
