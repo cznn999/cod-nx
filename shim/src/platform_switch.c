@@ -276,13 +276,8 @@ static HidSixAxisSensorHandle sx_handheld, sx_full, sx_dual_l, sx_dual_r;
  * through move_curve (heading unchanged); the sideways part is eased by
  * strafe_curve on its own so forward stays dominant and diagonals arrive
  * gradually. cod1.cfg: analog_move=0, move_curve=<n>, strafe_curve=<n>. */
-#if defined(COD_GAME_UO)
-/* Off by default in United Offensive until its kbutton addresses (game.h) have
- * been checked on hardware; analog_move=1 in cod1_uo.cfg turns it on. */
-static int analog_move = 0;
-#else
+/* Analog movement enabled by default for both games. */
 static int analog_move = 1;
-#endif
 static float move_curve = 1.6f, strafe_curve = 2.0f;
 
 static void controls_init(void)
