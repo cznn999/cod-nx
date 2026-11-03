@@ -241,8 +241,8 @@ What the Switch port adds:
 | `tools/check_game_files.py` | Checks the game files before building. |
 
 ## Support
-Making ports is consumes a lot of my time, and Claude tokens (lol)
-Every contribution helps cover development costs, and helps me to roll out ports faster.
+Making ports consumes a lot of my time, and Claude tokens (lol) <br>
+Every contribution helps cover development costs, and to roll out ports faster.
 Thanks for supporting my work!
 [BuyMeACoffee](https://buymeacoffee.com/czn999)
 
