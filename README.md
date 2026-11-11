@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="banner.jpg" alt="Pure" width="800">
+</p>
+
 # Call of Duty (2003) for Nintendo Switch
 
 A native Nintendo Switch port of the single-player campaigns of **Call of Duty**
