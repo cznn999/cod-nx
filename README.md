@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="banner.jpg" alt="Pure" width="800">
+  <img src="banner.jpg" alt="CoD" width="800">
 </p>
 
 # Call of Duty (2003) for Nintendo Switch
